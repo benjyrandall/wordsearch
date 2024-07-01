@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Word Search Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+        }
+        .grid-container {
+            margin-right: 20px;
+        }
+        .sidebar {
+            border: 1px solid #ccc;
+            padding: 10px;
+            width: 200px;
+        }
+        .sidebar h3 {
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        .word {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: middle;
+            line-height: 40px;
+            margin: 2px;
+            cursor: pointer;
+        }
+        .clicked {
+            background-color: red;
+        }
+        .row-green {
+            background-color: green;
+        }
+        .unclickable {
+            pointer-events: none;
+        }
+        #timer {
+            margin-top: 20px;
+        }
+        #times-collected {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="grid-container">
+            <h1>Interactive Word Search Game</h1>
+            <div id="word-search">
+                {% for row_idx in range(wordsearch_grid | length) %}
+                    <div class="row" data-row="{{ row_idx }}">
+                        {% for cell in wordsearch_grid[row_idx] %}
+                            <div class="word row-{{ row_idx }} col-{{ cell.col }}" id="cell-{{ row_idx }}-{{ cell.col }}" data-row="{{ row_idx }}" data-col="{{ cell.col }}">{{ cell.letter }}</div>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div>
+                <label for="name">Your Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+
+            <div id="timer">Time: 00:00</div>
+            <button onclick="submitTime()">Submit Time</button>
+
+            <div id="times-collected">
+                <h3>Times Collected:</h3>
+                <ul id="times-list">
+                    {% for entry in times_collected %}
+                        <li>{{ entry.name }} - {{ entry.time }} seconds</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <h3>Words</h3>
+            <ol>
+                <li>elephant</li>
+                <li>yesterday</li>
+                <li>pizza</li>
+                <li>vertical</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let startTime, endTime, timerInterval;
+
+        function startTimer() {
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            endTime = new Date();
+            let timeDiff = endTime - startTime;
+            let seconds = Math.floor(timeDiff / 1000);
+            document.getElementById('timer').textContent = `Time: ${seconds} seconds`;
+        }
+
+        function start() {
+            document.querySelectorAll('.word').forEach(item => {
+                item.addEventListener('click', event => {
+                    if (!event.target.classList.contains('unclickable')) {
+                        if (event.target.classList.contains('clicked')) {
+                            event.target.classList.remove('clicked');
+                        } else {
+                            event.target.classList.add('clicked');
+                        }
+                        checkRowStatus();
+                    }
+                });
+            });
+            startTimer();
+        }
+
+        function checkRowStatus() {
+            const rowConditions = [
+                { row: 0, startCol: 0, endCol: 7 },
+                { row: 2, startCol: 0, endCol: 7 },
+                { row: 5, startCol: 0, endCol: 8 },
+                { row: 8, startCol: 3, endCol: 7 },
+            ];
+
+            rowConditions.forEach(condition => {
+                const { row, startCol, endCol } = condition;
+                const rowCells = document.querySelectorAll(`.row-${row}`);
+                const targetCells = Array.from(rowCells).filter(cell => {
+                    const col = parseInt(cell.dataset.col, 10);
+                    return col >= startCol && col <= endCol;
+                });
+
+                const allTargetRed = targetCells.every(cell => cell.classList.contains('clicked') || cell.classList.contains('row-green'));
+                const noOtherRed = Array.from(document.querySelectorAll('.word')).every(cell => {
+                    const cellRow = parseInt(cell.dataset.row, 10);
+                    const cellCol = parseInt(cell.dataset.col, 10);
+                    if ((cellRow !== row || cellCol < startCol || cellCol > endCol) && !cell.classList.contains('row-green')) {
+                        return !cell.classList.contains('clicked');
+                    }
+                    return true;
+                });
+
+                if (allTargetRed && noOtherRed) {
+                    targetCells.forEach(cell => {
+                        cell.classList.add('row-green');
+                        cell.classList.add('unclickable');
+                    });
+                }
+            });
+        }
+
+        function submitTime() {
+            clearInterval(timerInterval);
+            let endTime = new Date();
+            let timeDiff = endTime - startTime;
+            let seconds = Math.floor(timeDiff / 1000);
+            let name = document.getElementById('name').value;
+
+            fetch('/submit_time', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: name, time: seconds }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                location.reload();
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        window.onload = function() {
+            start();
+        };
+    </script>
+</body>
+</html>
